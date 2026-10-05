@@ -11,12 +11,24 @@ jobs:
           distribution: 'temurin'
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
-      - name: Setup Gradle
-        uses: gradle/gradle-build-action@v2
-      - name: Build with Gradle
-        run: gradle assembleDebug
+      - name: Install Build Tools
+        run: sdkmanager "platforms;android-34" "build-tools;34.0.0"
+      - name: Build APK manually
+        run: |
+          AAPT2=$ANDROID_HOME/build-tools/34.0.0/aapt2
+          D8=$ANDROID_HOME/build-tools/34.0.0/d8
+          APKSIGNER=$ANDROID_HOME/build-tools/34.0.0/apksigner
+          ANDROID_JAR=$ANDROID_HOME/platforms/android-34/android.jar
+          mkdir -p classes dexdir
+          $AAPT2 compile --dir res -o compiled.zip
+          $AAPT2 link -o unsigned.apk -I $ANDROID_JAR --manifest AndroidManifest.xml compiled.zip --java src
+          javac -source 1.8 -target 1.8 -cp $ANDROID_JAR -d classes src/com/example/hello/*.java
+          $D8 --lib $ANDROID_JAR --output . classes/com/example/hello/*.class
+          cp classes.dex dexdir/
+          $AAPT2 link -o unsigned.apk -I $ANDROID_JAR --manifest AndroidManifest.xml -R compiled.zip --java src
+          $APKSIGNER sign --ks debug.keystore --ks-pass pass:android --ks-key-alias debug --key-pass pass:android --out app.apk unsigned.apk
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: app.apk
